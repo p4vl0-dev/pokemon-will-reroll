@@ -44,6 +44,9 @@ After a successful reroll:
 ### 5. Visual Marker
 Messages that have already been rerolled receive a **golden border** – this helps GMs and players see that the roll has been modified.
 
+### 6. Pushing Fate option
+Add one or more successes for rolls, without deleting it.
+
 ---
 
 ## Module Settings
