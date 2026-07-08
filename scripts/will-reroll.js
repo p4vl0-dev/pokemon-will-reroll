@@ -53,6 +53,16 @@ Hooks.once("init", () => {
     default: false,
     restricted: false
   });
+
+  game.settings.register(MODULE_ID, "allowPushingFate", {
+    name: game.i18n.localize("WILLREROLL.Settings.allowPushingFate.name"),
+    hint: game.i18n.localize("WILLREROLL.Settings.allowPushingFate.hint"),
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: true,
+    restricted: false
+  });
 });
 
 // ============================================================
@@ -61,6 +71,11 @@ Hooks.once("init", () => {
 
 Hooks.on("renderChatMessageHTML", (message, html) => {
   const root = html instanceof jQuery ? html : $(html);
+
+  // Пропускаем сообщения с блоком dice-formula (ручные броски, например инициатива)
+  if (root.find(".dice-formula").length) {
+    return;
+  }
 
   if (message.getFlag(MODULE_ID, "willModified")) {
     root.css({
@@ -116,6 +131,10 @@ function shouldShowWillMessage() {
 
 function isRerollAllAllowed() {
   return game.settings.get(MODULE_ID, "allowRerollAllDice");
+}
+
+function isPushingFateAllowed() {
+  return game.settings.get(MODULE_ID, "allowPushingFate");
 }
 
 function extractPokeroleDiceValues(root) {
@@ -295,6 +314,7 @@ function openPokeroleWillRerollDialog(message, oldResults) {
   const { actor, token, isLocalCopy } = getRerollActorAndToken(message);
   const pokemonActor = actor;
   const trainerActor = isTrainerWillAllowed() ? getTrainerActor() : null;
+  const pushingFateEnabled = isPushingFateAllowed();
 
   const currentWill = pokemonActor ? getActorWill(pokemonActor, token, isLocalCopy) : 0;
   const trainerCurrentWill = trainerActor ? getActorWill(trainerActor, null, false) : 0;
@@ -494,6 +514,49 @@ function openPokeroleWillRerollDialog(message, oldResults) {
     return true;
   }
 
+  // ===== PUSHING FATE: action to add guaranteed success =====
+  async function addGuaranteedSuccessAction() {
+    if (!pokemonActor) {
+      ui.notifications.warn(game.i18n.localize("WILLREROLL.Notifications.noPokemon"));
+      return false;
+    }
+
+    const alreadyUsed = message.getFlag(MODULE_ID, "rerollUsed") === true;
+    const allowMultiple = game.settings.get(MODULE_ID, "allowMultipleRerolls");
+    if (alreadyUsed && !allowMultiple) {
+      ui.notifications.warn("Rerolls are already used for this roll.");
+      return false;
+    }
+
+    const trainer = isTrainerWillAllowed() ? getTrainerActor() : null;
+    const pokemonWill = getActorWill(pokemonActor, token, isLocalCopy);
+    let spent = false;
+
+    if (pokemonWill >= 1) {
+      spent = await spendActorWill(pokemonActor, 1, token, isLocalCopy);
+    } else if (trainer && getActorWill(trainer, null, false) >= 1) {
+      spent = await spendActorWill(trainer, 1, null, false);
+    }
+
+    if (!spent) {
+      ui.notifications.warn("Not enough Will to add a guaranteed success.");
+      return false;
+    }
+
+    const currentBonus = message.getFlag(MODULE_ID, "guaranteedSuccesses") || 0;
+    await message.setFlag(MODULE_ID, "guaranteedSuccesses", currentBonus + 1);
+
+    if (!allowMultiple) {
+      await message.setFlag(MODULE_ID, "rerollUsed", true);
+    }
+
+    const currentRoot = $(`<div class="message-content">${message.content}</div>`);
+    const currentDiceValues = extractPokeroleDiceValues(currentRoot);
+    await updatePokeroleRollMessage(message, currentDiceValues, currentDiceValues);
+
+    return true;
+  }
+
   // ----- Selecting all dice -----
   function selectAllDice(element) {
     const dice = element.querySelectorAll('.will-reroll-die');
@@ -628,6 +691,14 @@ function openPokeroleWillRerollDialog(message, oldResults) {
         if (shouldClose) dialogInstance.close();
       }
     },
+    ...(pushingFateEnabled ? [{
+      action: "guaranteed",
+      label: game.i18n.localize("WILLREROLL.Dialog.guaranteedButton"),
+      callback: async (event, button, dialogInstance) => {
+        const success = await addGuaranteedSuccessAction();
+        if (success) dialogInstance.close();
+      }
+    }] : []),
     {
       action: "cancel",
       label: game.i18n.localize("WILLREROLL.Dialog.cancelButton"),
@@ -757,7 +828,7 @@ async function createWillMessageOnce(
 }
 
 // ============================================================
-//  UPDATE ROLL MESSAGE
+//  UPDATE ROLL MESSAGE (исправленная версия)
 // ============================================================
 
 async function updatePokeroleRollMessage(message, oldResults, newResults) {
@@ -783,8 +854,9 @@ async function updatePokeroleRollMessage(message, oldResults, newResults) {
     return;
   }
 
-  // --- Handle REGULAR success rolls ---
+  // --- Handle REGULAR rolls ---
   const originalContent = message.content;
+  const originalFlavor = message.flavor ?? "";
   const rawSuccesses = countSuccesses(newResults);
   
   let constantBonus = 0;
@@ -792,35 +864,109 @@ async function updatePokeroleRollMessage(message, oldResults, newResults) {
   if (sysAccuracyData && typeof sysAccuracyData.constantBonus === 'number') {
     constantBonus = sysAccuracyData.constantBonus;
   }
-  const finalSuccesses = rawSuccesses + constantBonus;
+
+  const guaranteedBonus = message.getFlag(MODULE_ID, "guaranteedSuccesses") || 0;
+  const finalSuccesses = rawSuccesses + constantBonus + guaranteedBonus;
 
   const requiredSuccesses = getRequiredSuccesses(originalContent);
-
-  await message.setFlag(MODULE_ID, "willModified", true);
-
-  const originalFlavor = message.flavor ?? "";
   const isAccuracyRoll =
     /Accuracy roll/i.test(originalFlavor) ||
     /success(?:es)? required/i.test(originalContent);
 
-  let content = originalContent;
-  content = replaceSuccessText(content, finalSuccesses);
-  content = replaceDiceResults(content, newResults);
-  content = replaceDamageText(content, originalContent, finalSuccesses);
-  content = replaceApplyDamageData(content, finalSuccesses);
+  // Создаём jQuery-обёртку для удобной манипуляции DOM
+  const $wrapper = $(`<div>${originalContent}</div>`);
 
-  if (isAccuracyRoll && finalSuccesses >= requiredSuccesses) {
-    const moveId =
-      getOriginalMoveId(originalContent) ??
-      await getMoveIdFromFlavor(message, originalFlavor);
-    content = addPokeroleDefenseButtons(message, content, finalSuccesses, moveId);
-  } else if (isAccuracyRoll && finalSuccesses < requiredSuccesses) {
-    const wrapper = $(`<div>${content}</div>`);
-    wrapper.find('.pokerole .action-buttons').closest('.pokerole').remove();
-    content = wrapper.html();
+  // 1. Обновляем текст успехов (первый <b>)
+  const $successBold = $wrapper.find('b:first');
+  if ($successBold.length) {
+    const newSuccessHtml = replaceSuccessText(originalContent, finalSuccesses, guaranteedBonus);
+    const newBoldContent = $(`<div>${newSuccessHtml}</div>`).find('b:first').html();
+    $successBold.html(newBoldContent);
+  } else {
+    const newSuccessHtml = replaceSuccessText(originalContent, finalSuccesses, guaranteedBonus);
+    $wrapper.prepend(newSuccessHtml);
   }
 
-  await message.update({ content });
+  // 2. Обновляем dice-rolls
+  const $diceRolls = $wrapper.find('.dice-rolls');
+  if ($diceRolls.length) {
+    const newDiceList = $('<ol class="dice-rolls"></ol>');
+    newResults.forEach(value => {
+      const li = $('<li class="roll die d6">' + value + '</li>');
+      if (value >= 4) li.addClass('max');
+      newDiceList.append(li);
+    });
+    $diceRolls.replaceWith(newDiceList);
+  }
+
+  // 3. Обработка accuracy rolls – обновляем кнопки clash/evade, сохраняя остальные
+  if (isAccuracyRoll) {
+    const $actionButtons = $wrapper.find('.pokerole .action-buttons');
+    if ($actionButtons.length) {
+      // Сохраняем все кнопки, кроме clash/evade
+      const $otherButtons = $actionButtons.find('[data-action]:not([data-action="clash"]):not([data-action="evade"])').clone();
+      
+      // Читаем флаги из accuracyData
+      const canBeClashed = sysAccuracyData?.canBeClashed ?? false;
+      const canBeEvaded = sysAccuracyData?.canBeEvaded ?? false;
+
+      // Очищаем контейнер и добавляем сохранённые кнопки
+      $actionButtons.empty();
+      $actionButtons.append($otherButtons);
+
+      // Добавляем clash/evade только если они разрешены и бросок успешен
+      if (finalSuccesses >= requiredSuccesses) {
+        const { actor } = getRerollActorAndToken(message);
+        let moveId = getOriginalMoveId(originalContent);
+        if (!moveId && actor) {
+          moveId = await getMoveIdFromFlavor(message, originalFlavor);
+        }
+        if (moveId && actor) {
+          if (canBeClashed) {
+            const clashBtn = $(`<button class="chat-action" data-action="clash" data-attacker-id="${actor.uuid}" data-move-id="${moveId}" data-expected-successes="${finalSuccesses}">Clash</button>`);
+            $actionButtons.append(clashBtn);
+          }
+          if (canBeEvaded) {
+            const evadeBtn = $(`<button class="chat-action" data-action="evade">Evade</button>`);
+            $actionButtons.append(evadeBtn);
+          }
+        }
+      }
+      // Если успеха не хватает – clash/evade не добавляются (они уже удалены)
+    }
+  }
+
+  // 4. Обновление текста урона и data-damage-updates (для damage rolls)
+  const isDamageRoll = /Damage roll/i.test(originalFlavor) || /took\s+\d+\s+damage/i.test(originalContent);
+  if (isDamageRoll) {
+    // Заменяем число урона в тексте
+    const newContent = replaceDamageText($wrapper.html(), originalContent, finalSuccesses);
+    // Обновляем data-damage-updates
+    const $updatedWrapper = $(`<div>${newContent}</div>`);
+    const $applyDamageBtn = $updatedWrapper.find('[data-action="applyDamage"]');
+    if ($applyDamageBtn.length) {
+      const raw = $applyDamageBtn.attr("data-damage-updates");
+      if (raw) {
+        try {
+          const updates = JSON.parse(raw);
+          for (const update of updates) {
+            update.damage = finalSuccesses;
+          }
+          $applyDamageBtn.attr("data-damage-updates", JSON.stringify(updates));
+        } catch (e) {
+          debugWarn("Failed to parse data-damage-updates", e);
+        }
+      }
+    }
+    // Заменяем содержимое на обновлённое
+    $wrapper.replaceWith($updatedWrapper);
+  }
+
+  // 5. Сохраняем флаг, что сообщение было изменено
+  await message.setFlag(MODULE_ID, "willModified", true);
+
+  // 6. Обновляем сообщение
+  await message.update({ content: $wrapper.html() });
 }
 
 // ============================================================
@@ -838,24 +984,6 @@ function replaceDamageText(content, originalContent, newDamage) {
   return content.replace(/(.+?\s+took\s+)\d+(\s+damage!?)/i, `$1${newDamage}$2`);
 }
 
-function replaceApplyDamageData(content, newDamage) {
-  const wrapper = $(`<div>${content}</div>`);
-  const button = wrapper.find('[data-action="applyDamage"]').first();
-  if (!button.length) return content;
-  const raw = button.attr("data-damage-updates");
-  if (!raw) return content;
-  try {
-    const updates = JSON.parse(raw);
-    for (const update of updates) {
-      update.damage = newDamage;
-    }
-    button.attr("data-damage-updates", JSON.stringify(updates));
-  } catch (error) {
-    debugWarn("Will Reroll | data-damage-updates konnte nicht gelesen werden:", raw, error);
-  }
-  return wrapper.html();
-}
-
 async function getMoveIdFromFlavor(message, flavor) {
   const match = flavor.match(/Accuracy roll:\s*(.+)$/i);
   if (!match) return null;
@@ -868,10 +996,15 @@ async function getMoveIdFromFlavor(message, flavor) {
   return item ? item.uuid : null;
 }
 
-function replaceSuccessText(content, successes) {
+function replaceSuccessText(content, successes, guaranteedBonus = 0) {
   if (!content) return content;
-  const label = "successes"; /* successes === 1 ? "success" :  */
-  return content.replace(/<b>\d+\s+success(?:es)?<\/b>/i, `<b>${successes} ${label}</b>`);
+  const label = successes === 1 ? "success" : "successes";
+  let newText = `<b>${successes} ${label}`;
+  if (guaranteedBonus > 0) {
+    newText += ` (+${guaranteedBonus} guaranteed)`;
+  }
+  newText += `</b>`;
+  return content.replace(/<b>.*?<\/b>/, newText);
 }
 
 function replaceDiceResults(content, newResults) {
@@ -891,22 +1024,4 @@ function replaceDiceResults(content, newResults) {
 function getOriginalMoveId(content) {
   const wrapper = $(`<div>${content}</div>`);
   return wrapper.find('[data-action="clash"]').attr("data-move-id") ?? null;
-}
-
-function addPokeroleDefenseButtons(message, content, successes, moveId) {
-  if (content.includes('data-action="clash"')) return content;
-  const actorId = message.speaker.actor;
-  if (!actorId) return content;
-  const actor = game.actors.get(actorId);
-  if (!actor) return content;
-  const attackerId = actor.uuid;
-  if (!moveId) return content;
-  return content + `
-    <div class="pokerole">
-      <div class="action-buttons">
-        <button class="chat-action" data-action="clash" data-attacker-id="${attackerId}" data-move-id="${moveId}" data-expected-successes="${successes}">Clash</button>
-        <button class="chat-action" data-action="evade">Evade</button>
-      </div>
-    </div>
-  `;
 }

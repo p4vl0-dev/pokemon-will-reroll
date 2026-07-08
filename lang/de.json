@@ -7,15 +7,16 @@
   "WILLREROLL.Settings.showWillMessage.hint": "Wenn aktiviert, wird nach jedem Reroll eine Chat-Nachricht mit einem Flavour-Text über die Willensnutzung angezeigt.",
   "WILLREROLL.Settings.allowRerollAllDice.name": "Alle Würfel neu würfeln erlauben",
   "WILLREROLL.Settings.allowRerollAllDice.hint": "Wenn aktiviert, erscheint im Dialog ein Button 'Alle Würfel neu würfeln', mit dem alle Würfel (auch erfolgreiche) auf einmal neu geworfen werden können.",
-  "WILLREROLL.Dialog.rerollAllButton": "Alle Würfel neu würfeln",
   
+  "WILLREROLL.Settings.allowPushingFate.name": "Erlaube 'Schicksal herausfordern' (garantierter Erfolg)",
+  "WILLREROLL.Settings.allowPushingFate.hint": "Wenn aktiviert, erscheint im Reroll-Dialog ein Button '+1 Erfolg (1 Wille)', der einen garantierten Erfolg ohne erneutes Würfeln hinzufügt.",
+  
+  "WILLREROLL.Dialog.guaranteedButton": "+1 Erfolg (1 Wille)",
+  "WILLREROLL.Dialog.rerollAllButton": "Alle Würfel neu würfeln",
   "WILLREROLL.Dialog.freeRerollLabel": "Kostenloser Reroll (keine Willenskosten)",
-
   "WILLREROLL.Dialog.costLabel": "Kosten",
   "WILLREROLL.Dialog.spentLabel": "Verteilt",
-
   "WILLREROLL.Button.label": "Wille einsetzen",
-
   "WILLREROLL.Dialog.title": "Wille-Reroll",
   "WILLREROLL.Dialog.willHeader": "Wille einsetzen",
   "WILLREROLL.Dialog.willCost": "Kosten",
@@ -26,12 +27,10 @@
   "WILLREROLL.Dialog.rerollButton": "Neu würfeln",
   "WILLREROLL.Dialog.cancelButton": "Abbrechen",
   "WILLREROLL.Dialog.dsnFlavor": "Willens-Reroll",
-
   "WILLREROLL.Notifications.notEnoughWill": "{name} hat nicht genug Wille.",
   "WILLREROLL.Notifications.noDiceSelected": "Du hast keine Würfel ausgewählt.",
   "WILLREROLL.Notifications.noPokemon": "Kein Pokémon gefunden.",
   "WILLREROLL.Notifications.costMismatch": "Die verteilten Wille-Kosten müssen genau der Anzahl der ausgewählten Würfel entsprechen.",
-
   "WILLREROLL.WillMessage.fallback": "{name} setzt seinen Willen ein.",
   "WILLREROLL.TrainerWillMessage.fallback": "{trainer} unterstützt {pokemon}."
 }

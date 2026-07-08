@@ -2,7 +2,7 @@
   "id": "pokemon-will-reroll",
   "title": "Pokemon Will Reroll",
   "description": "Allows targeted re-rolling of individual Pokérole dice via chat cards.",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "authors": [
     {
       "name": "Giovanni"
@@ -14,7 +14,7 @@
   ],
   "compatibility": {
     "minimum": "13",
-    "verified": "13"
+    "verified": "14"
   },
   "url": "https://github.com/Joberl-lab/pokemon-will-reroll",
   "manifest": "https://github.com/Joberl-lab/pokemon-will-reroll/releases/latest/download/module.json",

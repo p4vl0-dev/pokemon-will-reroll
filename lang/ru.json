@@ -7,15 +7,16 @@
   "WILLREROLL.Settings.showWillMessage.hint": "Если включено, после каждого переброса будет отображаться сообщение в чате с текстом об использовании Воли.",
   "WILLREROLL.Settings.allowRerollAllDice.name": "Разрешить переброс всех кубиков",
   "WILLREROLL.Settings.allowRerollAllDice.hint": "Если включено, в диалоге появится кнопка 'Перебросить все кубики', позволяющая перебросить все кубики (включая успешные) за один раз.",
+  
+  "WILLREROLL.Settings.allowPushingFate.name": "Разрешить 'Бросок судьбы' (гарантированный успех)",
+  "WILLREROLL.Settings.allowPushingFate.hint": "Если включено, в диалоге переброса появится кнопка '+1 успех (1 Воля)', которая добавляет один гарантированный успех без переброса кубиков.",
+  
+  "WILLREROLL.Dialog.guaranteedButton": "+1 успех (1 Воля)",
   "WILLREROLL.Dialog.rerollAllButton": "Перебросить все кубики",
-  
   "WILLREROLL.Dialog.freeRerollLabel": "Бесплатный переброс (без траты Воли)",
-  
   "WILLREROLL.Dialog.costLabel": "Стоимость",
   "WILLREROLL.Dialog.spentLabel": "Потрачено",
-
   "WILLREROLL.Button.label": "Использовать Волю",
-
   "WILLREROLL.Dialog.title": "Переброс по Воле",
   "WILLREROLL.Dialog.willHeader": "Использовать Волю",
   "WILLREROLL.Dialog.willCost": "Стоимость",
@@ -26,12 +27,10 @@
   "WILLREROLL.Dialog.rerollButton": "Перебросить",
   "WILLREROLL.Dialog.cancelButton": "Отмена",
   "WILLREROLL.Dialog.dsnFlavor": "Переброс по Воле",
-
   "WILLREROLL.Notifications.notEnoughWill": "У {name} недостаточно Воли.",
   "WILLREROLL.Notifications.noDiceSelected": "Вы не выбрали ни одного кубика.",
   "WILLREROLL.Notifications.noPokemon": "Покемон не найден.",
   "WILLREROLL.Notifications.costMismatch": "Распределённые затраты Воли должны точно равняться количеству выбранных кубиков.",
-
   "WILLREROLL.WillMessage.fallback": "{name} использует свою Волю.",
   "WILLREROLL.TrainerWillMessage.fallback": "{trainer} поддерживает {pokemon}."
 }

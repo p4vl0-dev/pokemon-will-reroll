@@ -7,14 +7,16 @@
   "WILLREROLL.Settings.showWillMessage.hint": "If enabled, a chat message with a flavor text about using Will will be displayed after each reroll.",
   "WILLREROLL.Settings.allowRerollAllDice.name": "Allow Reroll All Dice",
   "WILLREROLL.Settings.allowRerollAllDice.hint": "If enabled, a 'Reroll All Dice' button will appear in the dialog, allowing you to reroll all dice (including successful ones) at once.",
+  
+  "WILLREROLL.Settings.allowPushingFate.name": "Allow Pushing Fate (guaranteed success)",
+  "WILLREROLL.Settings.allowPushingFate.hint": "If enabled, a '+1 Success (1 Will)' button will appear in the reroll dialog, adding one guaranteed success without rerolling dice.",
+  
+  "WILLREROLL.Dialog.guaranteedButton": "+1 Success (1 Will)",
   "WILLREROLL.Dialog.rerollAllButton": "Reroll All Dice",
   "WILLREROLL.Dialog.freeRerollLabel": "Free reroll (no Will cost)",
-
   "WILLREROLL.Dialog.costLabel": "Cost",
   "WILLREROLL.Dialog.spentLabel": "Spent",
-
   "WILLREROLL.Button.label": "Use Will",
-
   "WILLREROLL.Dialog.title": "Will Reroll",
   "WILLREROLL.Dialog.willHeader": "Use Will",
   "WILLREROLL.Dialog.willCost": "Cost",
@@ -25,14 +27,10 @@
   "WILLREROLL.Dialog.rerollButton": "Reroll",
   "WILLREROLL.Dialog.cancelButton": "Cancel",
   "WILLREROLL.Dialog.dsnFlavor": "Will Reroll",
-
   "WILLREROLL.Notifications.notEnoughWill": "{name} does not have enough Will.",
   "WILLREROLL.Notifications.noDiceSelected": "You have not selected any dice.",
   "WILLREROLL.Notifications.noPokemon": "No Pokémon found.",
   "WILLREROLL.Notifications.costMismatch": "The distributed Will costs must add up to exactly the number of selected dice.",
-
   "WILLREROLL.WillMessage.fallback": "{name} uses their Will.",
   "WILLREROLL.TrainerWillMessage.fallback": "{trainer} supports {pokemon}."
-
-  
 }
