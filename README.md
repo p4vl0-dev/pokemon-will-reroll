@@ -3,7 +3,7 @@
 **A module for the Pokerole system in Foundry VTT**  
 Adds the ability to reroll dice in rolls by spending **Will points** of the Pokémon or Trainer.
 
-> ✅ Works with **Foundry V13**  
+> ✅ Works with **Foundry V13-v14**  
 > 📦 **Manifest for installation:**  
 > `https://github.com/Joberl-lab/pokemon-will-reroll/releases/latest/download/module.json`
 
