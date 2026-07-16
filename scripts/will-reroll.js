@@ -832,62 +832,62 @@ async function createWillMessageOnce(
 // ============================================================
 
 async function updatePokeroleRollMessage(message, oldResults, newResults) {
-  // --- Handle CLASH messages ---
-  const clashData = message.flags?.clashData || message.getFlag("pokerole", "clashData");
-  if (clashData) {
-    const expected = clashData.expectedSuccesses;
-    const successHtmlTemplate = clashData.successHtml;
-    const failureHtmlTemplate = clashData.failureHtml;
-
-    const newSuccesses = countSuccesses(newResults);
-    let content;
-    if (newSuccesses >= expected) {
-      content = successHtmlTemplate;
-    } else {
-      content = failureHtmlTemplate;
-    }
-    content = replaceSuccessText(content, newSuccesses);
-    content = replaceDiceResults(content, newResults);
-
-    await message.update({ content });
-    await message.setFlag(MODULE_ID, "willModified", true);
-    return;
-  }
-
-  // --- Handle REGULAR rolls ---
   const originalContent = message.content;
   const originalFlavor = message.flavor ?? "";
+  
+  // Получаем rollData из системы
+  const rollData = message.getFlag("pokerole", "rollData");
   const rawSuccesses = countSuccesses(newResults);
   
-  let constantBonus = 0;
-  const sysAccuracyData = message.getFlag("pokerole", "accuracyData");
-  if (sysAccuracyData && typeof sysAccuracyData.constantBonus === 'number') {
-    constantBonus = sysAccuracyData.constantBonus;
+  // Определяем модификатор из rollData или из accuracyData (fallback)
+  let modifier = 0;
+  let painPenalty = 0;
+  let requiredSuccesses = null;
+  let rollType = null;
+  let context = null;
+
+  if (rollData) {
+    modifier = rollData.modifier ?? 0;
+    painPenalty = rollData.painPenalty ?? 0;
+    requiredSuccesses = rollData.requiredSuccesses ?? null;
+    rollType = rollData.type;
+    context = rollData.context;
+    // Для clash-сообщений требуемые успехи могут быть в context.expectedSuccesses
+    if (rollType === 'clash' && context && requiredSuccesses === null) {
+      requiredSuccesses = context.expectedSuccesses ?? null;
+    }
+  } else {
+    // Fallback для старых сообщений
+    const sysAccuracyData = message.getFlag("pokerole", "accuracyData");
+    if (sysAccuracyData && typeof sysAccuracyData.constantBonus === 'number') {
+      modifier = sysAccuracyData.constantBonus;
+    }
+    const reqMatch = originalContent.match(/\((\d+)\s+required\)/i);
+    if (reqMatch) requiredSuccesses = Number(reqMatch[1]);
+    else {
+      const reqMatchOld = originalContent.match(/\((\d+)\s+success(?:es)?\s+required\)/i);
+      if (reqMatchOld) requiredSuccesses = Number(reqMatchOld[1]);
+    }
   }
 
+  // Получаем гарантированные успехи от модуля
   const guaranteedBonus = message.getFlag(MODULE_ID, "guaranteedSuccesses") || 0;
-  const finalSuccesses = rawSuccesses + constantBonus + guaranteedBonus;
+  
+  // Итоговое число успехов: сырые успехи + модификатор + гарантированный бонус
+  const finalSuccesses = rawSuccesses + modifier + guaranteedBonus;
 
-  const requiredSuccesses = getRequiredSuccesses(originalContent);
-  const isAccuracyRoll =
-    /Accuracy roll/i.test(originalFlavor) ||
-    /success(?:es)? required/i.test(originalContent);
+  // Определяем, является ли это accuracy-броском
+  const isAccuracyRoll = /Accuracy roll/i.test(originalFlavor) || 
+                         /success(?:es)? required/i.test(originalContent) ||
+                         (rollType === 'accuracy');
 
-  // Создаём jQuery-обёртку для удобной манипуляции DOM
+  // Определяем, является ли это clash-броском
+  const isClashRoll = rollType === 'clash';
+
+  // Создаём jQuery-обёртку для манипуляций
   const $wrapper = $(`<div>${originalContent}</div>`);
 
-  // 1. Обновляем текст успехов (первый <b>)
-  const $successBold = $wrapper.find('b:first');
-  if ($successBold.length) {
-    const newSuccessHtml = replaceSuccessText(originalContent, finalSuccesses, guaranteedBonus);
-    const newBoldContent = $(`<div>${newSuccessHtml}</div>`).find('b:first').html();
-    $successBold.html(newBoldContent);
-  } else {
-    const newSuccessHtml = replaceSuccessText(originalContent, finalSuccesses, guaranteedBonus);
-    $wrapper.prepend(newSuccessHtml);
-  }
-
-  // 2. Обновляем dice-rolls
+  // 1. Обновляем dice-rolls (для всех типов)
   const $diceRolls = $wrapper.find('.dice-rolls');
   if ($diceRolls.length) {
     const newDiceList = $('<ol class="dice-rolls"></ol>');
@@ -899,23 +899,85 @@ async function updatePokeroleRollMessage(message, oldResults, newResults) {
     $diceRolls.replaceWith(newDiceList);
   }
 
-  // 3. Обработка accuracy rolls – обновляем кнопки clash/evade, сохраняя остальные
+  // 2. Для clash-бросков – полностью пересоздаём контент после .dice-tooltip
+  if (isClashRoll && context) {
+    const $diceTooltip = $wrapper.find('.dice-tooltip');
+    if ($diceTooltip.length) {
+      // Удаляем все элементы после .dice-tooltip
+      $diceTooltip.nextAll().remove();
+    } else {
+      // Если нет .dice-tooltip (маловероятно), удаляем всё после первого элемента
+      const $first = $wrapper.children().first();
+      if ($first.length) {
+        $first.nextAll().remove();
+      }
+    }
+
+    // Формируем новый текст успехов
+    let boldText = `${finalSuccesses} Total Successes`;
+    if (guaranteedBonus > 0) {
+      boldText += ` (+${guaranteedBonus} guaranteed)`;
+    }
+    // Определяем требуемые успехи
+    const expected = context.expectedSuccesses ?? 1;
+    const req = requiredSuccesses !== null ? requiredSuccesses : expected;
+    boldText += ` (${req} required)`;
+
+    // Вставляем новый <b> и результат
+    const resultHtml = finalSuccesses >= expected ? context.successResultHtml : context.failureResultHtml;
+    const newHtml = `<p><b>${boldText}</b></p>${resultHtml || ''}`;
+    
+    if ($diceTooltip.length) {
+      $diceTooltip.after(newHtml);
+    } else {
+      // Если нет .dice-tooltip, вставляем в начало (маловероятно)
+      $wrapper.prepend(newHtml);
+    }
+
+    // Сохраняем флаг и обновляем – для clash всё готово
+    await message.setFlag(MODULE_ID, "willModified", true);
+    await message.update({ content: $wrapper.html() });
+    return;
+  }
+
+  // 3. Для accuracy-бросков – обновляем только текст успехов и кнопки
   if (isAccuracyRoll) {
+    // Обновляем текст успехов (первый <b>)
+    const $successBold = $wrapper.find('b:first');
+    if ($successBold.length) {
+      const newSuccessHtml = replaceSuccessText(originalContent, finalSuccesses, guaranteedBonus, requiredSuccesses);
+      const newBoldContent = $(`<div>${newSuccessHtml}</div>`).find('b:first').html();
+      if (newBoldContent) {
+        $successBold.html(newBoldContent);
+      } else {
+        let text = `${finalSuccesses} Total Successes`;
+        if (guaranteedBonus > 0) text += ` (+${guaranteedBonus} guaranteed)`;
+        if (requiredSuccesses !== null) text += ` (${requiredSuccesses} required)`;
+        $successBold.text(text);
+      }
+    } else {
+      const newSuccessHtml = replaceSuccessText(originalContent, finalSuccesses, guaranteedBonus, requiredSuccesses);
+      $wrapper.prepend(newSuccessHtml);
+    }
+
+    // Обновляем кнопки clash/evade
     const $actionButtons = $wrapper.find('.pokerole .action-buttons');
     if ($actionButtons.length) {
-      // Сохраняем все кнопки, кроме clash/evade
       const $otherButtons = $actionButtons.find('[data-action]:not([data-action="clash"]):not([data-action="evade"])').clone();
-      
-      // Читаем флаги из accuracyData
-      const canBeClashed = sysAccuracyData?.canBeClashed ?? false;
-      const canBeEvaded = sysAccuracyData?.canBeEvaded ?? false;
+      let canBeClashed = false;
+      let canBeEvaded = false;
+      if (context) {
+        canBeClashed = context.canBeClashed ?? false;
+        canBeEvaded = context.canBeEvaded ?? false;
+      } else {
+        canBeClashed = originalContent.includes('data-action="clash"');
+        canBeEvaded = originalContent.includes('data-action="evade"');
+      }
 
-      // Очищаем контейнер и добавляем сохранённые кнопки
       $actionButtons.empty();
       $actionButtons.append($otherButtons);
 
-      // Добавляем clash/evade только если они разрешены и бросок успешен
-      if (finalSuccesses >= requiredSuccesses) {
+      if (finalSuccesses >= (requiredSuccesses ?? 1)) {
         const { actor } = getRerollActorAndToken(message);
         let moveId = getOriginalMoveId(originalContent);
         if (!moveId && actor) {
@@ -927,21 +989,18 @@ async function updatePokeroleRollMessage(message, oldResults, newResults) {
             $actionButtons.append(clashBtn);
           }
           if (canBeEvaded) {
-            const evadeBtn = $(`<button class="chat-action" data-action="evade">Evade</button>`);
+            const evadeBtn = $(`<button class="chat-action" data-action="evade" data-expected-successes="${finalSuccesses}">Evade</button>`);
             $actionButtons.append(evadeBtn);
           }
         }
       }
-      // Если успеха не хватает – clash/evade не добавляются (они уже удалены)
     }
   }
 
-  // 4. Обновление текста урона и data-damage-updates (для damage rolls)
+  // 4. Для damage-бросков – обновляем текст урона и data-damage-updates
   const isDamageRoll = /Damage roll/i.test(originalFlavor) || /took\s+\d+\s+damage/i.test(originalContent);
   if (isDamageRoll) {
-    // Заменяем число урона в тексте
     const newContent = replaceDamageText($wrapper.html(), originalContent, finalSuccesses);
-    // Обновляем data-damage-updates
     const $updatedWrapper = $(`<div>${newContent}</div>`);
     const $applyDamageBtn = $updatedWrapper.find('[data-action="applyDamage"]');
     if ($applyDamageBtn.length) {
@@ -958,25 +1017,17 @@ async function updatePokeroleRollMessage(message, oldResults, newResults) {
         }
       }
     }
-    // Заменяем содержимое на обновлённое
     $wrapper.replaceWith($updatedWrapper);
   }
 
-  // 5. Сохраняем флаг, что сообщение было изменено
+  // 5. Сохраняем флаг и обновляем сообщение
   await message.setFlag(MODULE_ID, "willModified", true);
-
-  // 6. Обновляем сообщение
   await message.update({ content: $wrapper.html() });
 }
 
 // ============================================================
 //  HELPER FUNCTIONS
 // ============================================================
-
-function getRequiredSuccesses(content) {
-  const match = content.match(/\((\d+)\s+success(?:es)? required\)/i);
-  return match ? Number(match[1]) : 1;
-}
 
 function replaceDamageText(content, originalContent, newDamage) {
   const isDamageRoll = /Damage roll/i.test(originalContent) || /took\s+\d+\s+damage/i.test(originalContent);
@@ -996,29 +1047,49 @@ async function getMoveIdFromFlavor(message, flavor) {
   return item ? item.uuid : null;
 }
 
-function replaceSuccessText(content, successes, guaranteedBonus = 0) {
+function replaceSuccessText(content, successes, guaranteedBonus = 0, requiredSuccesses = null) {
   if (!content) return content;
-  const label = successes === 1 ? "success" : "successes";
+  const boldMatch = content.match(/<b>(.*?)<\/b>/);
+  if (boldMatch) {
+    let oldText = boldMatch[1];
+    // Извлекаем существующий суффикс (X required) – ищем в любом виде
+    let suffix = '';
+    const requiredMatch = oldText.match(/\((\d+)\s+required\)/i);
+    if (requiredMatch) {
+      suffix = requiredMatch[0];
+    } else {
+      const oldRequiredMatch = oldText.match(/\((\d+)\s+success(?:es)?\s+required\)/i);
+      if (oldRequiredMatch) {
+        suffix = `(${oldRequiredMatch[1]} required)`;
+      } else if (requiredSuccesses !== null) {
+        suffix = `(${requiredSuccesses} required)`;
+      }
+    }
+    let label = 'successes';
+    if (/total\s+successes/i.test(oldText)) {
+      label = 'Total Successes';
+    } else if (/successes?/i.test(oldText)) {
+      label = 'successes';
+    }
+    let newText = `${successes} ${label}`;
+    if (guaranteedBonus > 0) {
+      newText += ` (+${guaranteedBonus} guaranteed)`;
+    }
+    if (suffix) {
+      newText += ` ${suffix}`;
+    }
+    return content.replace(/<b>.*?<\/b>/, `<b>${newText}</b>`);
+  }
+  const label = successes === 1 ? 'success' : 'successes';
   let newText = `<b>${successes} ${label}`;
   if (guaranteedBonus > 0) {
     newText += ` (+${guaranteedBonus} guaranteed)`;
   }
-  newText += `</b>`;
-  return content.replace(/<b>.*?<\/b>/, newText);
-}
-
-function replaceDiceResults(content, newResults) {
-  if (!content) return content;
-  const wrapper = $(`<div>${content}</div>`);
-  const diceList = wrapper.find(".dice-rolls").first();
-  if (!diceList.length) return content;
-  diceList.empty();
-  for (const value of newResults) {
-    const li = $(`<li class="roll die d6">${value}</li>`);
-    if (value >= 4) li.addClass("max");
-    diceList.append(li);
+  if (requiredSuccesses !== null) {
+    newText += ` (${requiredSuccesses} required)`;
   }
-  return wrapper.html();
+  newText += `</b>`;
+  return newText + content;
 }
 
 function getOriginalMoveId(content) {
