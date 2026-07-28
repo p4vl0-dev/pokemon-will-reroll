@@ -5,7 +5,7 @@ Adds the ability to reroll dice in rolls by spending **Will points** of the Pok�
 
 > ✅ Works with **Foundry V13-v14**  
 > 📦 **Manifest for installation:**  
-> `https://github.com/Joberl-lab/pokemon-will-reroll/releases/latest/download/module.json`
+> `https://github.com/p4vl0-dev/pokemon-will-reroll/releases/latest/download/module.json`
 
 ---
 
