@@ -1,4 +1,4 @@
-# Pokemon Will Reroll
+# Pokemon Will Reroll Fork
 
 **A module for the Pokerole system in Foundry VTT**  
 Adds the ability to reroll dice in rolls by spending **Will points** of the Pokémon or Trainer.
