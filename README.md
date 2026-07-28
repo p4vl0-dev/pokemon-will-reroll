@@ -77,9 +77,3 @@ In the world settings (`World Settings`) the following options are available:
 - **Foundry VTT** version **13** or newer.
 - **Pokerole system** (the module relies on its data structure).
 
----
-
-## For Developers
-
-Source code is available in the repository:  
-[https://github.com/p4vl0-dev/pokemon-will-reroll](https://github.com/p4vl0-dev/pokemon-will-reroll)
